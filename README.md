@@ -1,3 +1,3 @@
 # CMPM 121 D2 Project
 
-This is the starting point for your CMPM 121 D2 project. Students should make sure to remove _this_ content from their README.md file and replace it with their own project documentation.
+This is the starting point for your CMPM 121 D2 project. I have completed steps 1 and 2 in the section. Thanks to Keith Kida for his help.
