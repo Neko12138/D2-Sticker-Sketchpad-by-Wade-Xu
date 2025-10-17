@@ -24,6 +24,8 @@ interface Drawing {
 
 const drawing: Drawing = { strokes: [] };
 
+const redoStack: Point[][] = [];
+
 let currentStroke: Point[] | null = null;
 
 function triggerDrawingChanged() {
@@ -47,10 +49,14 @@ canvas.addEventListener("drawing-changed", () => {
   }
 });
 
+//////////mouse/////////
+
 canvas.addEventListener("mousedown", (e) => {
   cursor.active = true;
   cursor.x = e.offsetX;
   cursor.y = e.offsetY;
+
+  redoStack.length = 0;
 
   currentStroke = [{ x: cursor.x, y: cursor.y }];
   drawing.strokes.push(currentStroke);
@@ -72,6 +78,9 @@ canvas.addEventListener("mouseup", () => {
   currentStroke = null;
 });
 
+/////////////button/////////////
+
+//clear
 const clearButton = document.createElement("button");
 clearButton.innerHTML = "clear";
 document.body.append(clearButton);
@@ -79,6 +88,33 @@ document.body.append(clearButton);
 clearButton.addEventListener("click", () => {
   if (ctx) {
     drawing.strokes = [];
+    redoStack.length = 0;
+    triggerDrawingChanged();
+  }
+});
+
+//undo
+const undoButton = document.createElement("button");
+undoButton.innerHTML = "undo";
+document.body.append(undoButton);
+
+undoButton.addEventListener("click", () => {
+  if (drawing.strokes.length > 0) {
+    const lastStroke = drawing.strokes.pop()!;
+    redoStack.push(lastStroke);
+    triggerDrawingChanged();
+  }
+});
+
+//redo
+const redoButton = document.createElement("button");
+redoButton.innerHTML = "redo";
+document.body.append(redoButton);
+
+redoButton.addEventListener("click", () => {
+  if (redoStack.length > 0) {
+    const restoredStroke = redoStack.pop()!;
+    drawing.strokes.push(restoredStroke);
     triggerDrawingChanged();
   }
 });
