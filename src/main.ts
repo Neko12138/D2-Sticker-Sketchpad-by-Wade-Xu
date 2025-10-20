@@ -13,10 +13,33 @@ const ctx = canvas.getContext("2d");
 
 const cursor = { active: false, x: 0, y: 0 };
 
+//////////// Interfaces ////////////
+
 interface DisplayCommand {
   display(ctx: CanvasRenderingContext2D): void;
   drag(x: number, y: number): void;
 }
+
+interface Drawing {
+  commands: DisplayCommand[];
+}
+
+interface ToolPreview {
+  draw(ctx: CanvasRenderingContext2D): void;
+}
+
+//////////// State ////////////
+
+const drawing: Drawing = { commands: [] };
+const redoStack: DisplayCommand[] = [];
+let currentCommand: DisplayCommand | null = null;
+let currentPreview: ToolPreview | null = null;
+
+let currentLineWidth = 1;
+let currentTool: "line" | "sticker" = "line";
+let currentSticker = "🎃";
+
+//////////// Commands ////////////
 
 function makeLineCommand(
   x: number,
@@ -45,23 +68,28 @@ function makeLineCommand(
   return { display, drag };
 }
 
-interface Drawing {
-  commands: DisplayCommand[];
+function makeStickerCommand(
+  x: number,
+  y: number,
+  emoji: string,
+): DisplayCommand {
+  let pos = { x, y };
+
+  function drag(x: number, y: number) {
+    pos = { x, y };
+  }
+
+  function display(ctx: CanvasRenderingContext2D) {
+    ctx.font = "24px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(emoji, pos.x, pos.y);
+  }
+
+  return { display, drag };
 }
 
-const drawing: Drawing = { commands: [] };
-
-const redoStack: DisplayCommand[] = [];
-
-let currentCommand: DisplayCommand | null = null;
-
-let currentLineWidth = 1;
-
-interface ToolPreview {
-  draw(ctx: CanvasRenderingContext2D): void;
-}
-
-let currentPreview: ToolPreview | null = null;
+//////////// Tool Previews ////////////
 
 function makeCirclePreview(x: number, y: number, r: number): ToolPreview {
   return {
@@ -71,10 +99,25 @@ function makeCirclePreview(x: number, y: number, r: number): ToolPreview {
       ctx.strokeStyle = "gray";
       ctx.arc(x, y, r / 2, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.strokeStyle = "black"; // reset color
+      ctx.strokeStyle = "black";
     },
   };
 }
+
+function makeStickerPreview(x: number, y: number, emoji: string): ToolPreview {
+  return {
+    draw(ctx: CanvasRenderingContext2D) {
+      ctx.font = "24px sans-serif";
+      ctx.globalAlpha = 0.5;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(emoji, x, y);
+      ctx.globalAlpha = 1.0;
+    },
+  };
+}
+
+//////////// Events ////////////
 
 function triggerDrawingChanged() {
   canvas.dispatchEvent(new Event("drawing-changed"));
@@ -110,7 +153,12 @@ canvas.addEventListener("mousedown", (e) => {
 
   redoStack.length = 0;
 
-  currentCommand = makeLineCommand(cursor.x, cursor.y, currentLineWidth);
+  if (currentTool === "line") {
+    currentCommand = makeLineCommand(cursor.x, cursor.y, currentLineWidth);
+  } else {
+    currentCommand = makeStickerCommand(cursor.x, cursor.y, currentSticker);
+  }
+
   drawing.commands.push(currentCommand);
   triggerDrawingChanged();
 });
@@ -123,7 +171,11 @@ canvas.addEventListener("mousemove", (e) => {
     currentCommand.drag(cursor.x, cursor.y);
     triggerDrawingChanged();
   } else {
-    currentPreview = makeCirclePreview(cursor.x, cursor.y, currentLineWidth);
+    if (currentTool === "line") {
+      currentPreview = makeCirclePreview(cursor.x, cursor.y, currentLineWidth);
+    } else {
+      currentPreview = makeStickerPreview(cursor.x, cursor.y, currentSticker);
+    }
     triggerToolMoved();
   }
 });
@@ -142,11 +194,9 @@ clearButton.innerHTML = "clear";
 document.body.append(clearButton);
 
 clearButton.addEventListener("click", () => {
-  if (ctx) {
-    drawing.commands = [];
-    redoStack.length = 0;
-    triggerDrawingChanged();
-  }
+  drawing.commands = [];
+  redoStack.length = 0;
+  triggerDrawingChanged();
 });
 
 //undo
@@ -181,7 +231,9 @@ thinButton.innerHTML = "thin";
 document.body.append(thinButton);
 
 thinButton.addEventListener("click", () => {
+  currentTool = "line";
   currentLineWidth = 1;
+  triggerToolMoved();
 });
 
 const thickButton = document.createElement("button");
@@ -189,5 +241,21 @@ thickButton.innerHTML = "thick";
 document.body.append(thickButton);
 
 thickButton.addEventListener("click", () => {
+  currentTool = "line";
   currentLineWidth = 5;
+  triggerToolMoved();
 });
+
+//emoji buttons
+const emojis = ["😭", "🎃", "❤️"];
+for (const emoji of emojis) {
+  const btn = document.createElement("button");
+  btn.innerHTML = emoji;
+  document.body.append(btn);
+
+  btn.addEventListener("click", () => {
+    currentTool = "sticker";
+    currentSticker = emoji;
+    triggerToolMoved();
+  });
+}
