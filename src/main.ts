@@ -57,8 +57,31 @@ let currentCommand: DisplayCommand | null = null;
 
 let currentLineWidth = 1;
 
+interface ToolPreview {
+  draw(ctx: CanvasRenderingContext2D): void;
+}
+
+let currentPreview: ToolPreview | null = null;
+
+function makeCirclePreview(x: number, y: number, r: number): ToolPreview {
+  return {
+    draw(ctx: CanvasRenderingContext2D) {
+      ctx.beginPath();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "gray";
+      ctx.arc(x, y, r / 2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = "black"; // reset color
+    },
+  };
+}
+
 function triggerDrawingChanged() {
   canvas.dispatchEvent(new Event("drawing-changed"));
+}
+
+function triggerToolMoved() {
+  canvas.dispatchEvent(new Event("tool-moved"));
 }
 
 canvas.addEventListener("drawing-changed", () => {
@@ -68,6 +91,14 @@ canvas.addEventListener("drawing-changed", () => {
   for (const cmd of drawing.commands) {
     cmd.display(ctx);
   }
+
+  if (!cursor.active && currentPreview) {
+    currentPreview.draw(ctx);
+  }
+});
+
+canvas.addEventListener("tool-moved", () => {
+  triggerDrawingChanged();
 });
 
 //////////mouse/////////
@@ -79,24 +110,28 @@ canvas.addEventListener("mousedown", (e) => {
 
   redoStack.length = 0;
 
-  //Line Width
   currentCommand = makeLineCommand(cursor.x, cursor.y, currentLineWidth);
   drawing.commands.push(currentCommand);
   triggerDrawingChanged();
 });
 
 canvas.addEventListener("mousemove", (e) => {
+  cursor.x = e.offsetX;
+  cursor.y = e.offsetY;
+
   if (cursor.active && ctx && currentCommand) {
-    cursor.x = e.offsetX;
-    cursor.y = e.offsetY;
     currentCommand.drag(cursor.x, cursor.y);
     triggerDrawingChanged();
+  } else {
+    currentPreview = makeCirclePreview(cursor.x, cursor.y, currentLineWidth);
+    triggerToolMoved();
   }
 });
 
 canvas.addEventListener("mouseup", () => {
   cursor.active = false;
   currentCommand = null;
+  triggerDrawingChanged();
 });
 
 /////////////button/////////////
