@@ -13,20 +13,42 @@ const ctx = canvas.getContext("2d");
 
 const cursor = { active: false, x: 0, y: 0 };
 
-interface Point {
-  x: number;
-  y: number;
+interface DisplayCommand {
+  display(ctx: CanvasRenderingContext2D): void;
+  drag(x: number, y: number): void;
+}
+
+function makeLineCommand(x: number, y: number): DisplayCommand {
+  const points: { x: number; y: number }[] = [{ x, y }];
+
+  function drag(x: number, y: number) {
+    points.push({ x, y });
+  }
+
+  function display(ctx: CanvasRenderingContext2D) {
+    if (points.length < 2) return;
+    ctx.beginPath();
+    for (let i = 1; i < points.length; i++) {
+      const p1 = points[i - 1]!;
+      const p2 = points[i]!;
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+    }
+    ctx.stroke();
+  }
+
+  return { display, drag };
 }
 
 interface Drawing {
-  strokes: Point[][];
+  commands: DisplayCommand[];
 }
 
-const drawing: Drawing = { strokes: [] };
+const drawing: Drawing = { commands: [] };
 
-const redoStack: Point[][] = [];
+const redoStack: DisplayCommand[] = [];
 
-let currentStroke: Point[] | null = null;
+let currentCommand: DisplayCommand | null = null;
 
 function triggerDrawingChanged() {
   canvas.dispatchEvent(new Event("drawing-changed"));
@@ -36,16 +58,8 @@ canvas.addEventListener("drawing-changed", () => {
   if (!ctx) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  for (const stroke of drawing.strokes) {
-    if (stroke.length < 2) continue;
-    ctx.beginPath();
-    for (let i = 1; i < stroke.length; i++) {
-      const p1 = stroke[i - 1]!;
-      const p2 = stroke[i]!;
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-    }
-    ctx.stroke();
+  for (const cmd of drawing.commands) {
+    cmd.display(ctx);
   }
 });
 
@@ -58,24 +72,23 @@ canvas.addEventListener("mousedown", (e) => {
 
   redoStack.length = 0;
 
-  currentStroke = [{ x: cursor.x, y: cursor.y }];
-  drawing.strokes.push(currentStroke);
+  currentCommand = makeLineCommand(cursor.x, cursor.y);
+  drawing.commands.push(currentCommand);
   triggerDrawingChanged();
 });
 
 canvas.addEventListener("mousemove", (e) => {
-  if (cursor.active && ctx && currentStroke) {
+  if (cursor.active && ctx && currentCommand) {
     cursor.x = e.offsetX;
     cursor.y = e.offsetY;
-
-    currentStroke.push({ x: cursor.x, y: cursor.y });
+    currentCommand.drag(cursor.x, cursor.y);
     triggerDrawingChanged();
   }
 });
 
 canvas.addEventListener("mouseup", () => {
   cursor.active = false;
-  currentStroke = null;
+  currentCommand = null;
 });
 
 /////////////button/////////////
@@ -87,7 +100,7 @@ document.body.append(clearButton);
 
 clearButton.addEventListener("click", () => {
   if (ctx) {
-    drawing.strokes = [];
+    drawing.commands = [];
     redoStack.length = 0;
     triggerDrawingChanged();
   }
@@ -99,9 +112,9 @@ undoButton.innerHTML = "undo";
 document.body.append(undoButton);
 
 undoButton.addEventListener("click", () => {
-  if (drawing.strokes.length > 0) {
-    const lastStroke = drawing.strokes.pop()!;
-    redoStack.push(lastStroke);
+  if (drawing.commands.length > 0) {
+    const lastCommand = drawing.commands.pop()!;
+    redoStack.push(lastCommand);
     triggerDrawingChanged();
   }
 });
@@ -113,8 +126,8 @@ document.body.append(redoButton);
 
 redoButton.addEventListener("click", () => {
   if (redoStack.length > 0) {
-    const restoredStroke = redoStack.pop()!;
-    drawing.strokes.push(restoredStroke);
+    const restoredCommand = redoStack.pop()!;
+    drawing.commands.push(restoredCommand);
     triggerDrawingChanged();
   }
 });
