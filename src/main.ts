@@ -18,7 +18,11 @@ interface DisplayCommand {
   drag(x: number, y: number): void;
 }
 
-function makeLineCommand(x: number, y: number): DisplayCommand {
+function makeLineCommand(
+  x: number,
+  y: number,
+  lineWidth: number,
+): DisplayCommand {
   const points: { x: number; y: number }[] = [{ x, y }];
 
   function drag(x: number, y: number) {
@@ -28,6 +32,7 @@ function makeLineCommand(x: number, y: number): DisplayCommand {
   function display(ctx: CanvasRenderingContext2D) {
     if (points.length < 2) return;
     ctx.beginPath();
+    ctx.lineWidth = lineWidth;
     for (let i = 1; i < points.length; i++) {
       const p1 = points[i - 1]!;
       const p2 = points[i]!;
@@ -49,6 +54,8 @@ const drawing: Drawing = { commands: [] };
 const redoStack: DisplayCommand[] = [];
 
 let currentCommand: DisplayCommand | null = null;
+
+let currentLineWidth = 1;
 
 function triggerDrawingChanged() {
   canvas.dispatchEvent(new Event("drawing-changed"));
@@ -72,7 +79,8 @@ canvas.addEventListener("mousedown", (e) => {
 
   redoStack.length = 0;
 
-  currentCommand = makeLineCommand(cursor.x, cursor.y);
+  //Line Width
+  currentCommand = makeLineCommand(cursor.x, cursor.y, currentLineWidth);
   drawing.commands.push(currentCommand);
   triggerDrawingChanged();
 });
@@ -130,4 +138,21 @@ redoButton.addEventListener("click", () => {
     drawing.commands.push(restoredCommand);
     triggerDrawingChanged();
   }
+});
+
+// lines
+const thinButton = document.createElement("button");
+thinButton.innerHTML = "thin";
+document.body.append(thinButton);
+
+thinButton.addEventListener("click", () => {
+  currentLineWidth = 1;
+});
+
+const thickButton = document.createElement("button");
+thickButton.innerHTML = "thick";
+document.body.append(thickButton);
+
+thickButton.addEventListener("click", () => {
+  currentLineWidth = 5;
 });
