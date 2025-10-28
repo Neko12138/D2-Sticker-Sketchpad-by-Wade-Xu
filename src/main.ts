@@ -246,16 +246,39 @@ thickButton.addEventListener("click", () => {
   triggerToolMoved();
 });
 
-//emoji buttons
-const emojis = ["😭", "🎃", "❤️"];
-for (const emoji of emojis) {
-  const btn = document.createElement("button");
-  btn.innerHTML = emoji;
-  document.body.append(btn);
+//Emoji Buttons
+const stickers: string[] = ["😭", "🎃", "❤️"];
 
-  btn.addEventListener("click", () => {
-    currentTool = "sticker";
-    currentSticker = emoji;
-    triggerToolMoved();
-  });
+const stickerContainer = document.createElement("div");
+document.body.append(stickerContainer);
+
+function renderStickerButtons() {
+  stickerContainer.innerHTML = "";
+
+  for (const emoji of stickers) {
+    const btn = document.createElement("button");
+    btn.innerHTML = emoji;
+    stickerContainer.append(btn);
+
+    btn.addEventListener("click", () => {
+      currentTool = "sticker";
+      currentSticker = emoji;
+      triggerToolMoved();
+    });
+  }
 }
+
+// initial render
+renderStickerButtons();
+
+const addStickerButton = document.createElement("button");
+addStickerButton.innerHTML = "Add Sticker";
+stickerContainer.append(addStickerButton);
+
+addStickerButton.addEventListener("click", () => {
+  const newSticker = prompt("Enter a new sticker (emoji or text):", "⭐");
+  if (newSticker && newSticker.trim() !== "") {
+    stickers.push(newSticker.trim());
+    renderStickerButtons();
+  }
+});
