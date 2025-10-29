@@ -282,3 +282,37 @@ addStickerButton.addEventListener("click", () => {
     renderStickerButtons();
   }
 });
+
+// export button
+const exportButton = document.createElement("button");
+exportButton.innerHTML = "Export 1024x1024";
+document.body.append(exportButton);
+
+exportButton.addEventListener("click", () => {
+  //create a temporary high-res canvas
+  const scale = 4;
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = canvas.width * scale;
+  exportCanvas.height = canvas.height * scale;
+  const exportCtx = exportCanvas.getContext("2d");
+  if (!exportCtx) return;
+
+  //scale context
+  exportCtx.scale(scale, scale);
+
+  // draw all commands onto high-res canvas
+  for (const cmd of drawing.commands) {
+    cmd.display(exportCtx);
+  }
+
+  //download
+  exportCanvas.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sticker_sketchpad.png";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, "image/png");
+});
