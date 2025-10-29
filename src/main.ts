@@ -38,6 +38,19 @@ let currentPreview: ToolPreview | null = null;
 let currentLineWidth = 2;
 let currentTool: "marker" | "sticker" = "marker";
 let currentSticker = "🎨";
+let currentColor = randomColor();
+let currentRotation = randomRotation();
+
+//////////// Utility functions ////////////
+
+function randomColor(): string {
+  const hue = Math.floor(Math.random() * 360);
+  return `hsl(${hue}, 90%, 45%)`;
+}
+
+function randomRotation(): number {
+  return (Math.random() - 0.5) * Math.PI / 2; // ±45 degrees
+}
 
 //////////// Commands ////////////
 
@@ -45,6 +58,7 @@ function makeLineCommand(
   x: number,
   y: number,
   lineWidth: number,
+  color: string,
 ): DisplayCommand {
   const points: { x: number; y: number }[] = [{ x, y }];
 
@@ -56,6 +70,7 @@ function makeLineCommand(
     if (points.length < 2) return;
     ctx.beginPath();
     ctx.lineWidth = lineWidth;
+    ctx.strokeStyle = color;
     for (let i = 1; i < points.length; i++) {
       const p1 = points[i - 1]!;
       const p2 = points[i]!;
@@ -72,6 +87,7 @@ function makeStickerCommand(
   x: number,
   y: number,
   emoji: string,
+  rotation: number,
 ): DisplayCommand {
   let pos = { x, y };
 
@@ -80,10 +96,14 @@ function makeStickerCommand(
   }
 
   function display(ctx: CanvasRenderingContext2D) {
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+    ctx.rotate(rotation);
     ctx.font = "32px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(emoji, pos.x, pos.y);
+    ctx.fillText(emoji, 0, 0);
+    ctx.restore();
   }
 
   return { display, drag };
@@ -91,12 +111,17 @@ function makeStickerCommand(
 
 //////////// Tool Previews ////////////
 
-function makeCirclePreview(x: number, y: number, r: number): ToolPreview {
+function makeMarkerPreview(
+  x: number,
+  y: number,
+  r: number,
+  color: string,
+): ToolPreview {
   return {
     draw(ctx: CanvasRenderingContext2D) {
       ctx.beginPath();
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = "gray";
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = color;
       ctx.arc(x, y, r / 2, 0, Math.PI * 2);
       ctx.stroke();
       ctx.strokeStyle = "black";
@@ -104,15 +129,24 @@ function makeCirclePreview(x: number, y: number, r: number): ToolPreview {
   };
 }
 
-function makeStickerPreview(x: number, y: number, emoji: string): ToolPreview {
+function makeStickerPreview(
+  x: number,
+  y: number,
+  emoji: string,
+  rotation: number,
+): ToolPreview {
   return {
     draw(ctx: CanvasRenderingContext2D) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
       ctx.font = "32px sans-serif";
       ctx.globalAlpha = 0.5;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(emoji, x, y);
+      ctx.fillText(emoji, 0, 0);
       ctx.globalAlpha = 1.0;
+      ctx.restore();
     },
   };
 }
@@ -130,14 +164,8 @@ function triggerToolMoved() {
 canvas.addEventListener("drawing-changed", () => {
   if (!ctx) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  for (const cmd of drawing.commands) {
-    cmd.display(ctx);
-  }
-
-  if (!cursor.active && currentPreview) {
-    currentPreview.draw(ctx);
-  }
+  for (const cmd of drawing.commands) cmd.display(ctx);
+  if (!cursor.active && currentPreview) currentPreview.draw(ctx);
 });
 
 canvas.addEventListener("tool-moved", () => {
@@ -148,13 +176,22 @@ canvas.addEventListener("mousedown", (e) => {
   cursor.active = true;
   cursor.x = e.offsetX;
   cursor.y = e.offsetY;
-
   redoStack.length = 0;
 
   if (currentTool === "marker") {
-    currentCommand = makeLineCommand(cursor.x, cursor.y, currentLineWidth);
+    currentCommand = makeLineCommand(
+      cursor.x,
+      cursor.y,
+      currentLineWidth,
+      currentColor,
+    );
   } else {
-    currentCommand = makeStickerCommand(cursor.x, cursor.y, currentSticker);
+    currentCommand = makeStickerCommand(
+      cursor.x,
+      cursor.y,
+      currentSticker,
+      currentRotation,
+    );
   }
 
   drawing.commands.push(currentCommand);
@@ -170,9 +207,19 @@ canvas.addEventListener("mousemove", (e) => {
     triggerDrawingChanged();
   } else {
     if (currentTool === "marker") {
-      currentPreview = makeCirclePreview(cursor.x, cursor.y, currentLineWidth);
+      currentPreview = makeMarkerPreview(
+        cursor.x,
+        cursor.y,
+        currentLineWidth,
+        currentColor,
+      );
     } else {
-      currentPreview = makeStickerPreview(cursor.x, cursor.y, currentSticker);
+      currentPreview = makeStickerPreview(
+        cursor.x,
+        cursor.y,
+        currentSticker,
+        currentRotation,
+      );
     }
     triggerToolMoved();
   }
@@ -194,14 +241,13 @@ const makeButton = (label: string, onClick: () => void) => {
   return btn;
 };
 
-// Clear
+// Clear / Undo / Redo
 makeButton("Clear", () => {
   drawing.commands = [];
   redoStack.length = 0;
   triggerDrawingChanged();
 });
 
-// Undo / Redo
 makeButton("Undo", () => {
   if (drawing.commands.length > 0) {
     const lastCommand = drawing.commands.pop()!;
@@ -218,16 +264,24 @@ makeButton("Redo", () => {
   }
 });
 
-// Marker width
+// Marker tools
+makeButton("New Marker", () => {
+  currentTool = "marker";
+  currentColor = randomColor();
+  triggerToolMoved();
+});
+
 makeButton("Thin Marker", () => {
   currentTool = "marker";
   currentLineWidth = 2;
+  currentColor = randomColor();
   triggerToolMoved();
 });
 
 makeButton("Thick Marker", () => {
   currentTool = "marker";
   currentLineWidth = 6;
+  currentColor = randomColor();
   triggerToolMoved();
 });
 
@@ -246,6 +300,7 @@ function renderStickerButtons() {
     btn.addEventListener("click", () => {
       currentTool = "sticker";
       currentSticker = emoji;
+      currentRotation = randomRotation();
       triggerToolMoved();
     });
   }
@@ -279,10 +334,7 @@ exportButton.addEventListener("click", () => {
   if (!exportCtx) return;
 
   exportCtx.scale(scale, scale);
-
-  for (const cmd of drawing.commands) {
-    cmd.display(exportCtx);
-  }
+  for (const cmd of drawing.commands) cmd.display(exportCtx);
 
   exportCanvas.toBlob((blob) => {
     if (!blob) return;
