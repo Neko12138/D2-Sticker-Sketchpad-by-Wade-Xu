@@ -35,9 +35,9 @@ const redoStack: DisplayCommand[] = [];
 let currentCommand: DisplayCommand | null = null;
 let currentPreview: ToolPreview | null = null;
 
-let currentLineWidth = 1;
-let currentTool: "line" | "sticker" = "line";
-let currentSticker = "🎃";
+let currentLineWidth = 2;
+let currentTool: "marker" | "sticker" = "marker";
+let currentSticker = "🎨";
 
 //////////// Commands ////////////
 
@@ -80,7 +80,7 @@ function makeStickerCommand(
   }
 
   function display(ctx: CanvasRenderingContext2D) {
-    ctx.font = "24px sans-serif";
+    ctx.font = "32px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(emoji, pos.x, pos.y);
@@ -107,7 +107,7 @@ function makeCirclePreview(x: number, y: number, r: number): ToolPreview {
 function makeStickerPreview(x: number, y: number, emoji: string): ToolPreview {
   return {
     draw(ctx: CanvasRenderingContext2D) {
-      ctx.font = "24px sans-serif";
+      ctx.font = "32px sans-serif";
       ctx.globalAlpha = 0.5;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -144,8 +144,6 @@ canvas.addEventListener("tool-moved", () => {
   triggerDrawingChanged();
 });
 
-//////////mouse/////////
-
 canvas.addEventListener("mousedown", (e) => {
   cursor.active = true;
   cursor.x = e.offsetX;
@@ -153,7 +151,7 @@ canvas.addEventListener("mousedown", (e) => {
 
   redoStack.length = 0;
 
-  if (currentTool === "line") {
+  if (currentTool === "marker") {
     currentCommand = makeLineCommand(cursor.x, cursor.y, currentLineWidth);
   } else {
     currentCommand = makeStickerCommand(cursor.x, cursor.y, currentSticker);
@@ -171,7 +169,7 @@ canvas.addEventListener("mousemove", (e) => {
     currentCommand.drag(cursor.x, cursor.y);
     triggerDrawingChanged();
   } else {
-    if (currentTool === "line") {
+    if (currentTool === "marker") {
       currentPreview = makeCirclePreview(cursor.x, cursor.y, currentLineWidth);
     } else {
       currentPreview = makeStickerPreview(cursor.x, cursor.y, currentSticker);
@@ -186,25 +184,25 @@ canvas.addEventListener("mouseup", () => {
   triggerDrawingChanged();
 });
 
-/////////////button/////////////
+//////////// Buttons ////////////
 
-//clear
-const clearButton = document.createElement("button");
-clearButton.innerHTML = "clear";
-document.body.append(clearButton);
+const makeButton = (label: string, onClick: () => void) => {
+  const btn = document.createElement("button");
+  btn.innerHTML = label;
+  btn.addEventListener("click", onClick);
+  document.body.append(btn);
+  return btn;
+};
 
-clearButton.addEventListener("click", () => {
+// Clear
+makeButton("Clear", () => {
   drawing.commands = [];
   redoStack.length = 0;
   triggerDrawingChanged();
 });
 
-//undo
-const undoButton = document.createElement("button");
-undoButton.innerHTML = "undo";
-document.body.append(undoButton);
-
-undoButton.addEventListener("click", () => {
+// Undo / Redo
+makeButton("Undo", () => {
   if (drawing.commands.length > 0) {
     const lastCommand = drawing.commands.pop()!;
     redoStack.push(lastCommand);
@@ -212,12 +210,7 @@ undoButton.addEventListener("click", () => {
   }
 });
 
-//redo
-const redoButton = document.createElement("button");
-redoButton.innerHTML = "redo";
-document.body.append(redoButton);
-
-redoButton.addEventListener("click", () => {
+makeButton("Redo", () => {
   if (redoStack.length > 0) {
     const restoredCommand = redoStack.pop()!;
     drawing.commands.push(restoredCommand);
@@ -225,30 +218,21 @@ redoButton.addEventListener("click", () => {
   }
 });
 
-// lines
-const thinButton = document.createElement("button");
-thinButton.innerHTML = "thin";
-document.body.append(thinButton);
-
-thinButton.addEventListener("click", () => {
-  currentTool = "line";
-  currentLineWidth = 1;
+// Marker width
+makeButton("Thin Marker", () => {
+  currentTool = "marker";
+  currentLineWidth = 2;
   triggerToolMoved();
 });
 
-const thickButton = document.createElement("button");
-thickButton.innerHTML = "thick";
-document.body.append(thickButton);
-
-thickButton.addEventListener("click", () => {
-  currentTool = "line";
-  currentLineWidth = 5;
+makeButton("Thick Marker", () => {
+  currentTool = "marker";
+  currentLineWidth = 6;
   triggerToolMoved();
 });
 
-//Emoji Buttons
-const stickers: string[] = ["😭", "🎃", "❤️"];
-
+// Stickers
+const stickers: string[] = ["🎨", "✨", "😎"];
 const stickerContainer = document.createElement("div");
 document.body.append(stickerContainer);
 
@@ -259,7 +243,6 @@ function renderStickerButtons() {
     const btn = document.createElement("button");
     btn.innerHTML = emoji;
     stickerContainer.append(btn);
-
     btn.addEventListener("click", () => {
       currentTool = "sticker";
       currentSticker = emoji;
@@ -268,7 +251,6 @@ function renderStickerButtons() {
   }
 }
 
-// initial render
 renderStickerButtons();
 
 const addStickerButton = document.createElement("button");
@@ -283,13 +265,12 @@ addStickerButton.addEventListener("click", () => {
   }
 });
 
-// export button
+// Export
 const exportButton = document.createElement("button");
 exportButton.innerHTML = "Export 1024x1024";
 document.body.append(exportButton);
 
 exportButton.addEventListener("click", () => {
-  //create a temporary high-res canvas
   const scale = 4;
   const exportCanvas = document.createElement("canvas");
   exportCanvas.width = canvas.width * scale;
@@ -297,15 +278,12 @@ exportButton.addEventListener("click", () => {
   const exportCtx = exportCanvas.getContext("2d");
   if (!exportCtx) return;
 
-  //scale context
   exportCtx.scale(scale, scale);
 
-  // draw all commands onto high-res canvas
   for (const cmd of drawing.commands) {
     cmd.display(exportCtx);
   }
 
-  //download
   exportCanvas.toBlob((blob) => {
     if (!blob) return;
     const url = URL.createObjectURL(blob);
